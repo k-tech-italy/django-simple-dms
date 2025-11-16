@@ -10,4 +10,4 @@
 dist
 __pycache__
 *.sqlite3
-src/django_xchange/version.py
+src/django_simple_dms/version.py
