@@ -32,7 +32,7 @@ def get_factory_for_model(_model):
 
 
 class DocumentTagFactory(DjangoModelFactory):
-    id = Sequence(lambda n: f't_{n}')
+    title = Sequence(lambda n: f't_{n}')
 
     class Meta:
         model = DocumentTag
@@ -80,6 +80,7 @@ class DocumentFactory(DjangoModelFactory):
 class UserGrantFactory(DjangoModelFactory):
     user = factory.SubFactory(UserFactory)
     group = None
+    document = factory.SubFactory(DocumentFactory)
 
     class Meta:
         model = DocumentGrant
@@ -88,6 +89,7 @@ class UserGrantFactory(DjangoModelFactory):
 class GroupGrantFactory(DjangoModelFactory):
     user = None
     group = factory.SubFactory(GroupFactory)
+    document = factory.SubFactory(DocumentFactory)
 
     class Meta:
         model = DocumentGrant

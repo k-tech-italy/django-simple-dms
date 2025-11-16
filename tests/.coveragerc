@@ -7,6 +7,7 @@ omit =
     .venv/*
     */migrations/*
     src/django_simple_dms/apps.py
+    src/django_simple_dms/version.py
     # Unused, might be removed
     src/django_simple_dms/config/context_processors.py
 

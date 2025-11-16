@@ -15,7 +15,7 @@ from pathlib import Path
 from .environ import env
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parents[3]
 
 
 # Quick-start development settings - unsuitable for production
@@ -111,3 +111,6 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
     'demo.backends.AnyUserAuthBackend',
 ]
+
+MEDIA_ROOT = env.str('MEDIA_ROOT', '') or (BASE_DIR / '~media')
+STATIC_ROOT = env.str('STATIC_ROOT', '') or (BASE_DIR / '~static')
