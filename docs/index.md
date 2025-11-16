@@ -6,7 +6,7 @@ This is the documentation for the django-xchange library.
 
 ## Features
 
-* 
+*
 
 ## Demo
 
@@ -21,4 +21,3 @@ To run the demo server: `python manage.py runserver` and go to http://127.0.0.1:
 ...
 
 You can test it with [httpie](https://httpie.io/) (provided by the development dependencies).
-

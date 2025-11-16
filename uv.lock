@@ -608,7 +608,7 @@ checks = [
     { name = "ruff", specifier = ">=0.12.12" },
 ]
 dev = [
-    { name = "django-environ", specifier = ">=0.12.0" },
+    { name = "django-environ", specifier = ">=0.12" },
     { name = "django-extensions", specifier = ">=4.1" },
     { name = "httpie", specifier = ">=3.2.4" },
     { name = "pre-commit" },
@@ -637,7 +637,7 @@ test = [
     { name = "pytest", specifier = ">=8.3.3" },
     { name = "pytest-cov", specifier = ">=5" },
     { name = "pytest-django", specifier = ">=4.11.1" },
-    { name = "pytest-xdist", specifier = ">=3.8.0" },
+    { name = "pytest-xdist", specifier = ">=3.8" },
     { name = "tox", specifier = ">=4.25" },
 ]
 
