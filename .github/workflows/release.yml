@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: release
-      url: https://pypi.org/project/django-xchange/${{ github.ref_name }}
+      url: https://pypi.org/project/django-simple-dms/${{ github.ref_name }}
     permissions:
       id-token: write
     steps:
