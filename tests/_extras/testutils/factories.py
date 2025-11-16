@@ -1,11 +1,12 @@
-from datetime import date
-
 import factory
-import faker
-from django.utils.text import slugify
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission
+from factory import Sequence, PostGenerationMethodCall, post_generation
 from factory.base import FactoryMetaClass
+import factory.fuzzy
 
-from django_simple_dms.models import DocumentTag
+from django_simple_dms.models import DocumentTag, DocumentGrant
+from factory.django import DjangoModelFactory
 
 factories_registry = {}
 
@@ -30,9 +31,63 @@ def get_factory_for_model(_model):
     return type(f'{_model._meta.model_name}AutoFactory', (AutoRegisterModelFactory,), {'Meta': Meta})
 
 
-class DocumentTagFactory(factory.django.DjangoModelFactory):
-
-    id = factory.Sequence(lambda n: f't_{n}')
+class DocumentTagFactory(DjangoModelFactory):
+    id = Sequence(lambda n: f't_{n}')
 
     class Meta:
         model = DocumentTag
+
+
+class UserFactory(DjangoModelFactory):
+    username = Sequence(lambda n: f'test_user_{n}')
+    email = Sequence(lambda n: f'test_user_{n}@nomail.com')
+    password = PostGenerationMethodCall('set_password', 'password')
+
+    class Meta:
+        model = get_user_model()
+        django_get_or_create = ('username',)
+
+
+class GroupFactory(DjangoModelFactory):
+    name = Sequence(lambda n: f'test_group_{n}')
+
+    class Meta:
+        model = Group
+
+    @post_generation
+    def permissions(self, create, extracted, **kwargs):
+        if not create:
+            return
+
+        # Check if extracted is a list/iterable (not None and not the manager itself)
+        if extracted is not None and not hasattr(extracted, 'add'):
+            # extracted is a list of permissions passed in
+            for perm in extracted:
+                self.permissions.add(perm)
+        else:
+            # No permissions passed, create a default one
+            self.permissions.add(Permission.objects.filter(codename='view_user').first())
+
+
+class DocumentFactory(DjangoModelFactory):
+    admin = factory.SubFactory(UserFactory)
+    document = factory.django.FileField(filename=factory.fuzzy.FuzzyText(length=12).fuzz() + '.pdf')
+
+    class Meta:
+        model = 'django_simple_dms.Document'
+
+
+class UserGrantFactory(DjangoModelFactory):
+    user = factory.SubFactory(UserFactory)
+    group = None
+
+    class Meta:
+        model = DocumentGrant
+
+
+class GroupGrantFactory(DjangoModelFactory):
+    user = None
+    group = factory.SubFactory(GroupFactory)
+
+    class Meta:
+        model = DocumentGrant

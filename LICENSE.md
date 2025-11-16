@@ -20,9 +20,9 @@ The "Software" is each version of the software that we make available under
 these Terms and Conditions, as indicated by our inclusion of these Terms and
 Conditions with the Software.
 
-### License Grant
+### License DocumentGrant
 
-Subject to your compliance with this License Grant and the Patents,
+Subject to your compliance with this License DocumentGrant and the Patents,
 Redistribution and Trademark clauses below, we hereby grant you the right to
 use, copy, modify, create derivative works, publicly perform, publicly display
 and redistribute the Software for any Permitted Purpose identified below.
@@ -85,7 +85,7 @@ Except for displaying the License Details and identifying us as the origin of
 the Software, you have no right under these Terms and Conditions to use our
 trademarks, trade names, service marks or product names.
 
-## Grant of Future License
+## DocumentGrant of Future License
 
 We hereby irrevocably grant you an additional license to use the Software under
 the Apache License, Version 2.0 that is effective on the fifth anniversary of
