@@ -1,3 +1,4 @@
+import io
 import typing
 
 from django.contrib.auth import get_user_model
@@ -10,7 +11,7 @@ from django.db.models import Q
 from django.utils.regex_helper import _lazy_re_compile
 
 from django.utils.translation import gettext_lazy as _l
-
+from pathlib import Path
 
 User = get_user_model()
 
@@ -136,3 +137,23 @@ class Document(models.Model):
     def __str__(self) -> str:
         admin = f' ({self.admin})' if self.admin else ''
         return f'{self.document.name}{admin}'
+
+    @classmethod
+    def add(cls, document: io.BufferedReader | str | Path, actor: User | None = None, admin: User | None = None, tags: list[str | DocumentTag] | None = None) -> 'Document':
+        """Create a new document and save it to the database.
+
+        actor: is the user who is creating this document.
+        admin: is the user who could administrate this document record.
+        """
+        obj = None
+        if isinstance(document, str):
+            obj = Document.objects.create(document=document, admin=admin)
+        elif isinstance(document, io.BufferedReader):
+            name = Path(document.name).name
+            obj = Document(admin=admin)
+            obj.document.save(name, document, save=True)
+        elif isinstance(document, Path):
+            obj = Document(admin=admin)
+            with document.open() as f:
+                obj.document.save(document.name, f, save=True)
+        return obj
