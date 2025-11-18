@@ -5,7 +5,7 @@ from factory import Sequence, PostGenerationMethodCall, post_generation
 from factory.base import FactoryMetaClass
 import factory.fuzzy
 
-from django_simple_dms.models import DocumentTag, DocumentGrant
+from django_simple_dms.models import DocumentTag, DocumentGrant, TagGrant
 from factory.django import DjangoModelFactory
 
 factories_registry = {}
@@ -93,3 +93,12 @@ class GroupGrantFactory(DjangoModelFactory):
 
     class Meta:
         model = DocumentGrant
+
+
+class TagGrantFactory(DjangoModelFactory):
+    group = factory.SubFactory(GroupFactory)
+    defaults = ['R']
+    tag = factory.SubFactory(DocumentTagFactory)
+
+    class Meta:
+        model = TagGrant

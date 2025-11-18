@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import typing
 
@@ -12,6 +14,10 @@ from django.utils.regex_helper import _lazy_re_compile
 
 from django.utils.translation import gettext_lazy as _l
 from pathlib import Path
+
+
+from django_simple_dms.exceptions import ForbiddenException
+from django_simple_dms.utils import solve_tags
 
 User = get_user_model()
 
@@ -29,7 +35,51 @@ validate_csslug = RegexValidator(
 )
 
 
+class CreationCheckResult:
+    pass
+
+
+class CreationCheckSuccess(CreationCheckResult):
+    def __init__(self, grants: typing.Iterable[TagGrant] = None) -> None:
+        self.grants = set(grants) if grants else set()
+
+
+class CreationCheckFail(CreationCheckResult):
+    def __init__(self, tags: typing.Iterable[DocumentTag]) -> None:
+        self.tags = tags
+
+
+class TagGrantQuerySet(models.QuerySet):
+    def check_create(
+        self, grantor: User = None, tags: list[str | DocumentTag] = None
+    ) -> CreationCheckFail | CreationCheckSuccess:
+        if grantor is None or grantor.is_superuser:
+            return CreationCheckSuccess()
+
+        tags = solve_tags(tags)
+
+        user_groups = set(grantor.groups.distinct())
+        found_grants = TagGrant.objects.filter(group__in=user_groups, tag__in=tags, create=True).distinct()
+
+        failing_tags = [t for t in tags if t.id not in set(found_grants.values_list('tag', flat=True))]
+
+        if failing_tags:
+            return CreationCheckFail(failing_tags)
+
+        return CreationCheckSuccess(grants=found_grants)
+
+
 class DocumentTag(models.Model):
+    """A Tag is a logical namespace for Documents.
+
+    A tag is defined in a hierarchical taxonomy. Each tag is identified by a unique slug prefixed by a dot-separated
+    list of its ancestors tags and a dot. Example: alfa.beta.charlie where charlie is the tag and beta and alfa are
+    its ancestors tags in ascending order.
+
+    A document can have 0..n tags. The first tag in the list identifies the document primary "nature" (ie the
+    structural folder in a strictly hierarchical classification).
+    """
+
     title = models.CharField(
         help_text=_l('A dot-separated slug'),
         unique=True,
@@ -48,18 +98,25 @@ class DocumentTag(models.Model):
 
 
 class DocumentGrant(models.Model):
+    """Represent the permissions granted to a grantor OR a group (Read, Update, Delete, Share).
+
+    Share: means a grantor can share the same permissions he owns directly or via a group to other users OR groups.
+
+    The owner implicitely owns RUDS grants.
+    """
+
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE, null=True, blank=True)
     group = models.ForeignKey(Group, on_delete=models.CASCADE, null=True, blank=True)
     granted_permissions = ArrayField(
         models.CharField(max_length=1), default=list, help_text=_l('one or more of R,U,D,S')
     )
-    granted_by_system = models.BooleanField(default=True)
+    grantor = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='document_grants')
     document = models.ForeignKey('Document', on_delete=models.CASCADE)
 
     def __str__(self) -> str:
         prefix = f'U:{self.user}' if self.user else f'D:{self.group}'
         granted_permissions = ''.join(self.granted_permissions)
-        if not self.granted_by_system:
+        if self.grantor:
             granted_permissions = granted_permissions.lower()
         return f'{prefix}:{granted_permissions}:{self.document}'
 
@@ -82,9 +139,13 @@ class DocumentGrant(models.Model):
 class TagGrant(models.Model):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, null=True, blank=True)
     create = models.BooleanField(default=True)
-    defaults = ArrayField(models.CharField(max_length=1), default=list, help_text=_l('one or more of R,U,D,S'))
-    granted_by_system = models.BooleanField(default=True)
+    defaults = ArrayField(
+        models.CharField(max_length=1), default=list, help_text=_l('one or more of R,U,D,S'), blank=True, null=True
+    )
+    grantor = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='tag_grants')
     tag = models.ForeignKey('DocumentTag', on_delete=models.CASCADE)
+
+    objects = TagGrantQuerySet.as_manager()
 
     def __str__(self) -> str:
         create = 'C' if self.create else ''
@@ -139,12 +200,26 @@ class Document(models.Model):
         return f'{self.document.name}{admin}'
 
     @classmethod
-    def add(cls, document: io.BufferedReader | str | Path, actor: User | None = None, admin: User | None = None, tags: list[str | DocumentTag] | None = None) -> 'Document':
+    def add(
+        cls,
+        document: io.BufferedReader | str | Path,
+        actor: User | None = None,
+        admin: User | None = None,
+        tags: list[str | DocumentTag] | None = None,
+    ) -> 'Document':
         """Create a new document and save it to the database.
 
-        actor: is the user who is creating this document.
-        admin: is the user who could administrate this document record.
+        actor: is the grantor who is creating this document.
+        admin: is the grantor who could administrate this document record.
         """
+        tags = solve_tags(tags)
+
+        check_result = TagGrant.objects.check_create(actor, tags)
+
+        if isinstance(check_result, CreationCheckFail):
+            errors = ', '.join(map(str, check_result.tags))
+            raise ForbiddenException(_l('Unable to create document with tags: %(errors)s') % {'errors': errors})
+
         obj = None
         if isinstance(document, str):
             obj = Document.objects.create(document=document, admin=admin)
@@ -156,4 +231,11 @@ class Document(models.Model):
             obj = Document(admin=admin)
             with document.open() as f:
                 obj.document.save(document.name, f, save=True)
+
+        for grant in check_result.grants:
+            if grant.defaults:
+                DocumentGrant.objects.create(
+                    document=obj, grantor=actor, group=grant.group, granted_permissions=grant.defaults
+                )
+
         return obj

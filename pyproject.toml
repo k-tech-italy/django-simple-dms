@@ -81,12 +81,6 @@ build.hooks.vcs.version-file = "src/django_simple_dms/version.py"
 version.source = "vcs"
 raw-options = { root = "../.." }
 
-#[tool.hatch.build.targets.sdist]
-#ignore-vcs = true
-#include = [
-#  "src/django_simple_dms/**/*.*",
-#]
-
 [tool.hatch.build.targets.wheel]
 packages = [ "src/django_simple_dms" ]
 
