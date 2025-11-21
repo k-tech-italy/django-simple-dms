@@ -1,16 +1,6 @@
-import typing
-from abc import abstractmethod
-from decimal import Decimal
+import io
+from pathlib import Path
 
-if typing.TYPE_CHECKING:
-    from datetime import date
+from django.core.files.uploadedfile import UploadedFile
 
-
-@typing.runtime_checkable
-class BrokerProtocol(typing.Protocol):
-    @abstractmethod
-    def get_rates(self, day: 'date', symbols: list[str]) -> dict[str, Decimal]:
-        raise NotImplementedError()
-
-
-type BrokerType = str | BrokerProtocol
+AnyFileLike = io.BufferedReader | str | Path | UploadedFile

@@ -19,8 +19,10 @@ from django.contrib import admin
 from django.urls import path
 from django.views.generic import RedirectView
 
+from demo.views import FileUploadView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', RedirectView.as_view(url='/admin/')),
+    path('upload/', FileUploadView.as_view(), name='upload_file'),
 ]

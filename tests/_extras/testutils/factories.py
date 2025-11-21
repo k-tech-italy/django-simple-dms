@@ -1,11 +1,9 @@
-import factory
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from factory import Sequence, PostGenerationMethodCall, post_generation
 from factory.base import FactoryMetaClass
 import factory.fuzzy
 
-from django_simple_dms.models import DocumentTag, DocumentGrant, TagGrant
 from factory.django import DjangoModelFactory
 
 factories_registry = {}
@@ -35,7 +33,7 @@ class DocumentTagFactory(DjangoModelFactory):
     title = Sequence(lambda n: f't_{n}')
 
     class Meta:
-        model = DocumentTag
+        model = 'django_simple_dms.DocumentTag'
 
 
 class UserFactory(DjangoModelFactory):
@@ -83,7 +81,7 @@ class UserGrantFactory(DjangoModelFactory):
     document = factory.SubFactory(DocumentFactory)
 
     class Meta:
-        model = DocumentGrant
+        model = 'django_simple_dms.DocumentGrant'
 
 
 class GroupGrantFactory(DjangoModelFactory):
@@ -92,7 +90,7 @@ class GroupGrantFactory(DjangoModelFactory):
     document = factory.SubFactory(DocumentFactory)
 
     class Meta:
-        model = DocumentGrant
+        model = 'django_simple_dms.DocumentGrant'
 
 
 class TagGrantFactory(DjangoModelFactory):
@@ -101,4 +99,4 @@ class TagGrantFactory(DjangoModelFactory):
     tag = factory.SubFactory(DocumentTagFactory)
 
     class Meta:
-        model = TagGrant
+        model = 'django_simple_dms.TagGrant'

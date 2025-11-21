@@ -1,4 +1,4 @@
-# Bitcaster Source License, Version 1.1, Apache 2.0 Future License
+# Django Document Management System Source License, Version 1.1, Apache 2.0 Future License
 
 ## Abbreviation
 
