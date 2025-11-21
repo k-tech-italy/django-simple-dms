@@ -43,6 +43,7 @@ dev = [
   "pre-commit",
 ]
 test = [
+  "django-webtest>=1.9.14",
   "factory-boy>=3.3.3",
   "freezegun>=1.5.5",
   "pytest>=8.3.3",

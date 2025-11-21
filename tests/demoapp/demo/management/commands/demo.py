@@ -2,8 +2,8 @@ from pathlib import Path
 
 from django.core.management import BaseCommand, call_command
 
-from django_xchange.management.utils import PrintCommandMixin
-from django_xchange.utils import import_csv
+from django_simple_dms.management.utils import PrintCommandMixin
+from django_simple_dms.utils import import_csv
 import sys
 
 

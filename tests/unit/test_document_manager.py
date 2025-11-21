@@ -1,11 +1,12 @@
-import pytest
-from django_simple_dms.models import Document
+from pathlib import Path
 
-from testutils.factories import UserGrantFactory, GroupFactory, DocumentFactory, UserFactory, GroupGrantFactory
+import pytest
 
 
 @pytest.fixture
 def scenario(db):
+    from testutils.factories import UserGrantFactory, GroupFactory, DocumentFactory, UserFactory, GroupGrantFactory
+
     u1 = UserFactory()
     u2 = UserFactory()
     u3 = UserFactory()
@@ -33,7 +34,7 @@ def scenario(db):
     # u3 can update and share other_document
     UserGrantFactory(user=u3, document=other_document, granted_permissions=['U', 'S'])
 
-    return {
+    yield {
         'u1': u1,
         'u2': u2,
         'u3': u3,
@@ -41,6 +42,8 @@ def scenario(db):
         'other_document': other_document,
         'document': document,
     }
+    for doc in [document, other_document]:
+        Path(doc.document.file.name).unlink()
 
 
 @pytest.mark.parametrize(
@@ -51,7 +54,9 @@ def scenario(db):
         pytest.param(3, 'do', 'd', 'o', '', 'do', id='u3'),
     ],
 )
-def test_user_can_do(user, access, read, update, delete, share, scenario):
+def test_user_can_do(user, access, read, update, delete, share, scenario) -> None:
+    from django_simple_dms.models import Document
+
     document: Document = scenario['document']
     other_document: Document = scenario['other_document']
 
@@ -81,6 +86,8 @@ def test_user_can_do(user, access, read, update, delete, share, scenario):
 
 
 def test_admin_can_all(scenario):
+    from django_simple_dms.models import Document
+
     admin = scenario['document'].admin
     document = scenario['document']
 

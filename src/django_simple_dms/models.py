@@ -3,18 +3,19 @@ from __future__ import annotations
 import io
 import typing
 
+import django
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.contrib.postgres.fields import DateRangeField, ArrayField
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import UploadedFile
 from django.core.validators import RegexValidator
-from django.db import models
-from django.db.models import Q
+from django.db import models, IntegrityError
+from django.db.models import Q, UniqueConstraint
 from django.utils.regex_helper import _lazy_re_compile
 
 from django.utils.translation import gettext_lazy as _l
 from pathlib import Path
-
 
 from django_simple_dms.exceptions import ForbiddenException
 from django_simple_dms.utils import solve_tags
@@ -22,6 +23,7 @@ from django_simple_dms.utils import solve_tags
 User = get_user_model()
 
 if typing.TYPE_CHECKING:
+    from django_simple_dms.types import AnyFileLike
     from django_simple_dms.models import Document
     from django.db.models.query import QuerySet
 
@@ -60,7 +62,6 @@ class TagGrantQuerySet(models.QuerySet):
 
         user_groups = set(grantor.groups.distinct())
         found_grants = TagGrant.objects.filter(group__in=user_groups, tag__in=tags, create=True).distinct()
-
         failing_tags = [t for t in tags if t.id not in set(found_grants.values_list('tag', flat=True))]
 
         if failing_tags:
@@ -102,7 +103,7 @@ class DocumentGrant(models.Model):
 
     Share: means a grantor can share the same permissions he owns directly or via a group to other users OR groups.
 
-    The owner implicitely owns RUDS grants.
+    The owner implicitly owns RUDS grants.
     """
 
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE, null=True, blank=True)
@@ -112,6 +113,17 @@ class DocumentGrant(models.Model):
     )
     grantor = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='document_grants')
     document = models.ForeignKey('Document', on_delete=models.CASCADE)
+
+    class Meta:
+        if django.VERSION >= (5, 0):
+            # nulls_distinct=False means that NULL is treated as a regular value for uniqueness checks
+            # it has been intrdoduced from Postgres 15 and Django 5.0
+            # see https://docs.djangoproject.com/en/5.2/releases/5.0/#models
+            constraints = [
+                UniqueConstraint(
+                    name='unique_doc_grant', fields=['grantor', 'user', 'group', 'document'], nulls_distinct=False
+                )
+            ]
 
     def __str__(self) -> str:
         prefix = f'U:{self.user}' if self.user else f'D:{self.group}'
@@ -124,13 +136,22 @@ class DocumentGrant(models.Model):
         if self.granted_permissions == []:
             self.granted_permissions = ['R']
         self.full_clean()
+        # Enforce uniqueness (with eventual null values) for Django versions < 5.0 and Postgres < 15
+        if django.VERSION < (5, 0):
+            qs = DocumentGrant.objects.filter(
+                grantor=self.grantor, user=self.user, group=self.group, document=self.document
+            )
+            if self.id:
+                qs.exclude(id=self.id)
+            if qs.exists():
+                raise ValidationError('Document grant with this Grantor, User, Group and Document already exists.')
         return super().save(*args, **kwargs)
 
     def clean(self) -> None:
-        if self.user and self.group:
-            raise ValidationError(_l('Cannot set both user and group'), '__all__')
         if not (self.user or self.group):
             raise ValidationError(_l('Must set either user or group'), '__all__')
+        if self.user and self.group:
+            raise ValidationError(_l('Cannot set both user and group'), '__all__')
         self.granted_permissions = [x.upper() for x in self.granted_permissions]
         if extra := (set(self.granted_permissions) - {'R', 'U', 'D', 'S'}):
             raise ValidationError(_l('Invalid permissions: %(extra)s') % {'extra': ''.join(extra)}, '__all__')
@@ -147,6 +168,15 @@ class TagGrant(models.Model):
 
     objects = TagGrantQuerySet.as_manager()
 
+    class Meta:
+        # nulls_distinct=False means that NULL is treated as a regular value for uniqueness checks
+        # it has been intrdoduced from Postgres 15 and Django 5.0
+        # see https://docs.djangoproject.com/en/5.2/releases/5.0/#models
+        if django.VERSION >= (5, 0):
+            constraints = [
+                UniqueConstraint(name='unique_tag_grant', fields=['grantor', 'group', 'tag'], nulls_distinct=False)
+            ]
+
     def __str__(self) -> str:
         create = 'C' if self.create else ''
         defaults = ''.join(self.defaults)
@@ -154,6 +184,13 @@ class TagGrant(models.Model):
 
     def save(self, *args, **kwargs) -> None:
         self.full_clean()
+        # Enforce uniqueness (with eventual null values) for Django versions < 5.0 and Postgres < 15
+        if django.VERSION < (5, 0):
+            qs = TagGrant.objects.filter(grantor=self.grantor, group=self.group, tag=self.tag)
+            if self.id:
+                qs = qs.exclude(id=self.id)
+            if qs.exists():
+                raise ValidationError('Tag grant with this Grantor, Group and Tag already exists.')
         return super().save(*args, **kwargs)
 
     def clean(self) -> None:
@@ -190,6 +227,7 @@ class Document(models.Model):
     document = models.FileField(upload_to='documents/%Y/%m/%d')
     upload_date = models.DateTimeField(auto_now_add=True)
     admin = models.ForeignKey(get_user_model(), on_delete=models.CASCADE, null=True, blank=True)
+    tags = models.ManyToManyField('DocumentTag', related_name='documents', through='Document2Tag')
 
     reference_period = DateRangeField(null=True, blank=True)
 
@@ -202,7 +240,7 @@ class Document(models.Model):
     @classmethod
     def add(
         cls,
-        document: io.BufferedReader | str | Path,
+        document: AnyFileLike,
         actor: User | None = None,
         admin: User | None = None,
         tags: list[str | DocumentTag] | None = None,
@@ -220,17 +258,19 @@ class Document(models.Model):
             errors = ', '.join(map(str, check_result.tags))
             raise ForbiddenException(_l('Unable to create document with tags: %(errors)s') % {'errors': errors})
 
-        obj = None
+        obj = Document(admin=admin)
         if isinstance(document, str):
-            obj = Document.objects.create(document=document, admin=admin)
-        elif isinstance(document, io.BufferedReader):
-            name = Path(document.name).name
-            obj = Document(admin=admin)
-            obj.document.save(name, document, save=True)
-        elif isinstance(document, Path):
-            obj = Document(admin=admin)
+            document = Path(document)
             with document.open() as f:
                 obj.document.save(document.name, f, save=True)
+        elif isinstance(document, io.BufferedReader):
+            name = Path(document.name).name
+            obj.document.save(name, document, save=True)
+        elif isinstance(document, Path):
+            with document.open() as f:
+                obj.document.save(document.name, f, save=True)
+        elif isinstance(document, UploadedFile):
+            obj.document.save(document.name, document.file, save=True)
 
         for grant in check_result.grants:
             if grant.defaults:
@@ -238,4 +278,28 @@ class Document(models.Model):
                     document=obj, grantor=actor, group=grant.group, granted_permissions=grant.defaults
                 )
 
+        for tag in tags:
+            Document2Tag.objects.create(document=obj, tag=tag)
+
         return obj
+
+
+class Document2Tag(models.Model):
+    tag = models.ForeignKey(DocumentTag, on_delete=models.CASCADE)
+    document = models.ForeignKey(Document, on_delete=models.CASCADE)
+
+    class Meta:
+        if django.VERSION >= (5, 0):
+            constraints = [models.UniqueConstraint(fields=['document', 'tag'], name='unique_tag_document')]
+
+    def __str__(self) -> str:
+        return f'{self.tag.title}:{self.document.document.name}'
+
+    def save(self, *args, **kwargs) -> None:
+        if django.VERSION < (5, 0):
+            qs = Document2Tag.objects.filter(document=self.document, tag=self.tag)
+            if self.id:
+                qs.exclude(id=self.id)
+            if qs.exists():
+                raise IntegrityError('duplicate key value violates unique constraint "unique_tag_document"')
+        super().save(*args, **kwargs)
