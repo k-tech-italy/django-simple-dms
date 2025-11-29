@@ -3,53 +3,6 @@
 import django
 from django.conf import settings
 from django.db import migrations, models
-from django.db.backends.base.schema import BaseDatabaseSchemaEditor
-from django.db.migrations.state import StateApps
-
-
-def add_constraints_if_django_5_or_higher(apps: StateApps, schema_editor: BaseDatabaseSchemaEditor) -> None:
-    """Add unique constraints with nulls_distinct=False for Django >= 5.0.
-
-    For Django < 5.0, this is a no-op since the parameter doesn't exist.
-    Uniqueness is enforced in the model's save() method for older versions.
-    """
-    if django.VERSION >= (5, 0):
-        DocumentGrant = apps.get_model('django_simple_dms', 'DocumentGrant')
-        TagGrant = apps.get_model('django_simple_dms', 'TagGrant')
-
-        # Create constraints with nulls_distinct=False (requires Django >= 5.0)
-        doc_grant_constraint = models.UniqueConstraint(
-            fields=('grantor', 'user', 'group', 'document'), name='unique_doc_grant', nulls_distinct=False
-        )
-        tag_grant_constraint = models.UniqueConstraint(
-            fields=('grantor', 'group', 'tag'), name='unique_tag_grant', nulls_distinct=False
-        )
-
-        # Apply constraints to database
-        schema_editor.add_constraint(DocumentGrant, doc_grant_constraint)
-        schema_editor.add_constraint(TagGrant, tag_grant_constraint)
-
-
-def remove_constraints_if_django_5_or_higher(apps: StateApps, schema_editor: BaseDatabaseSchemaEditor) -> None:
-    """Remove unique constraints for Django >= 5.0 during migration rollback.
-
-    For Django < 5.0, this is a no-op since no constraints were added.
-    """
-    if django.VERSION >= (5, 0):
-        DocumentGrant = apps.get_model('django_simple_dms', 'DocumentGrant')
-        TagGrant = apps.get_model('django_simple_dms', 'TagGrant')
-
-        # Create constraint objects matching those added in forward migration
-        doc_grant_constraint = models.UniqueConstraint(
-            fields=('grantor', 'user', 'group', 'document'), name='unique_doc_grant', nulls_distinct=False
-        )
-        tag_grant_constraint = models.UniqueConstraint(
-            fields=('grantor', 'group', 'tag'), name='unique_tag_grant', nulls_distinct=False
-        )
-
-        # Remove constraints from database
-        schema_editor.remove_constraint(DocumentGrant, doc_grant_constraint)
-        schema_editor.remove_constraint(TagGrant, tag_grant_constraint)
 
 
 class Migration(migrations.Migration):
@@ -59,8 +12,21 @@ class Migration(migrations.Migration):
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
-    operations = [
-        migrations.RunPython(
-            add_constraints_if_django_5_or_higher, reverse_code=remove_constraints_if_django_5_or_higher
-        ),
-    ]
+    operations = (
+        [
+            migrations.AddConstraint(
+                model_name='documentgrant',
+                constraint=models.UniqueConstraint(
+                    fields=('grantor', 'user', 'group', 'document'), name='unique_doc_grant', nulls_distinct=False
+                ),
+            ),
+            migrations.AddConstraint(
+                model_name='taggrant',
+                constraint=models.UniqueConstraint(
+                    fields=('grantor', 'group', 'tag'), name='unique_tag_grant', nulls_distinct=False
+                ),
+            ),
+        ]
+        if django.VERSION >= (5, 0)
+        else []
+    )
