@@ -271,6 +271,7 @@ class Document(models.Model):
                 obj.document.save(document.name, f, save=True)
         elif isinstance(document, UploadedFile):
             obj.document.save(document.name, document.file, save=True)
+        obj.save()
 
         for grant in check_result.grants:
             if grant.defaults:
