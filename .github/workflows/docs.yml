@@ -3,6 +3,7 @@ name: "Documentation"
 on:
   push:
     branches:
+      - develop
       - master
     paths:
       - 'docs/**'
@@ -10,6 +11,7 @@ on:
       - './github/workflows/docs.yml'
   pull_request:
     branches:
+      - develop
       - master
     types:
       - opened
@@ -74,7 +76,7 @@ jobs:
   # Deployment job
   deploy:
     needs: generate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
