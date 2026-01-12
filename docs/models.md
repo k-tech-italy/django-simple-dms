@@ -1,5 +1,8 @@
 # Models
 
+Data-Model diagram:
+![models.png](models.png)
+
 This section describes the models used by `django-simple-dms`.
 
 ## DocumentTag
