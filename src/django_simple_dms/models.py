@@ -18,6 +18,7 @@ from django.utils.translation import gettext_lazy as _l
 from pathlib import Path
 
 from django_simple_dms.exceptions import ForbiddenException
+from django_simple_dms.storage import get_document_storage
 from django_simple_dms.utils import solve_tags
 
 User = get_user_model()
@@ -224,7 +225,7 @@ class DocumentQuerySet(models.QuerySet):
 
 
 class Document(models.Model):
-    document = models.FileField(upload_to='documents/%Y/%m/%d')
+    document = models.FileField(upload_to='documents/%Y/%m/%d', storage=get_document_storage)
     upload_date = models.DateTimeField(auto_now_add=True)
     admin = models.ForeignKey(get_user_model(), on_delete=models.CASCADE, null=True, blank=True)
     tags = models.ManyToManyField('DocumentTag', related_name='documents', through='Document2Tag')
