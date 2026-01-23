@@ -35,6 +35,26 @@ INSTALLED_APPS = [
 
 ## File Storage Configuration
 
+### Storage Backend
+
+By default, the `document` FileField on the `Document` model uses Django's default storage backend. You can configure a custom storage backend by setting `DMS_DOCUMENT_STORAGE` in your Django settings:
+
+```python
+# settings.py
+
+# Option 1: Dotted path to a storage class (will be instantiated automatically)
+DMS_DOCUMENT_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+# Option 2: Callable that returns a storage instance (for custom configuration)
+DMS_DOCUMENT_STORAGE = lambda: S3Boto3Storage(bucket_name='my-documents')
+
+# Option 3: Pre-configured storage instance
+from storages.backends.s3boto3 import S3Boto3Storage
+DMS_DOCUMENT_STORAGE = S3Boto3Storage(bucket_name='my-documents')
+```
+
+If `DMS_DOCUMENT_STORAGE` is not set, Django's default storage will be used (typically `FileSystemStorage` saving to `MEDIA_ROOT`).
+
 ### Upload Path
 
 By default, documents are uploaded to `documents/%Y/%m/%d` (e.g., `documents/2024/03/15/`). This is configured in the `Document` model's FileField:
