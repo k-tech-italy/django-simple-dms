@@ -96,3 +96,76 @@ def test_admin_can_all(scenario):
     assert list(Document.objects.can_update(admin).values_list('id', flat=True)) == [document.id]
     assert list(Document.objects.can_delete(admin).values_list('id', flat=True)) == [document.id]
     assert list(Document.objects.can_share(admin).values_list('id', flat=True)) == [document.id]
+
+
+@pytest.fixture
+def tag_grant_scenario(db):
+    from testutils.factories import (
+        UserFactory,
+        GroupFactory,
+        DocumentFactory,
+        DocumentTagFactory,
+        TagGrantFactory,
+    )
+    from django_simple_dms.models import Document2Tag
+
+    user = UserFactory()
+    group = GroupFactory()
+    user.groups.add(group)
+
+    tag = DocumentTagFactory(title='invoices')
+    document = DocumentFactory(admin=None)
+    Document2Tag.objects.create(document=document, tag=tag)
+
+    # Group gets R and S permissions on documents tagged 'invoices'
+    TagGrantFactory(group=group, tag=tag, defaults=['R', 'S'])
+
+    # A document without the tag — should not be accessible via tag grant
+    other_document = DocumentFactory(admin=None)
+
+    yield {
+        'user': user,
+        'group': group,
+        'tag': tag,
+        'document': document,
+        'other_document': other_document,
+    }
+    for doc in [document, other_document]:
+        Path(doc.document.file.name).unlink(missing_ok=True)
+
+
+def test_tag_grant_accessible_by(tag_grant_scenario):
+    from django_simple_dms.models import Document
+
+    user = tag_grant_scenario['user']
+    document = tag_grant_scenario['document']
+
+    result = set(Document.objects.accessible_by(user).values_list('id', flat=True))
+    assert document.id in result
+    assert tag_grant_scenario['other_document'].id not in result
+
+
+def test_tag_grant_permissions(tag_grant_scenario):
+    from django_simple_dms.models import Document
+
+    user = tag_grant_scenario['user']
+    document = tag_grant_scenario['document']
+
+    assert document.id in set(Document.objects.can_read(user).values_list('id', flat=True))
+    assert document.id in set(Document.objects.can_share(user).values_list('id', flat=True))
+    assert document.id not in set(Document.objects.can_update(user).values_list('id', flat=True))
+    assert document.id not in set(Document.objects.can_delete(user).values_list('id', flat=True))
+
+
+def test_superuser_accessible_by(tag_grant_scenario):
+    from testutils.factories import UserFactory
+    from django_simple_dms.models import Document
+
+    superuser = UserFactory(is_superuser=True)
+    all_ids = set(Document.objects.values_list('id', flat=True))
+
+    assert set(Document.objects.accessible_by(superuser).values_list('id', flat=True)) == all_ids
+    assert set(Document.objects.can_read(superuser).values_list('id', flat=True)) == all_ids
+    assert set(Document.objects.can_update(superuser).values_list('id', flat=True)) == all_ids
+    assert set(Document.objects.can_delete(superuser).values_list('id', flat=True)) == all_ids
+    assert set(Document.objects.can_share(superuser).values_list('id', flat=True)) == all_ids
