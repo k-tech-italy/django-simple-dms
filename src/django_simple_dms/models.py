@@ -202,13 +202,27 @@ class TagGrant(models.Model):
 
 class DocumentQuerySet(models.QuerySet):
     def accessible_by(self, user: User) -> 'QuerySet[Document]':
-        return self.filter(Q(admin=user) | Q(documentgrant__user=user) | Q(documentgrant__group__user=user)).distinct()
+        # Superusers can access all documents. self.all() is lazy and cheaper than the
+        # multi-join query below, since no rows are fetched until the caller iterates.
+        if user.is_superuser:
+            return self.all()
+        return self.filter(
+            Q(admin=user)
+            | Q(documentgrant__user=user)
+            | Q(documentgrant__group__user=user)
+            | Q(tags__taggrant__group__user=user)
+        ).distinct()
 
     def can_grant_contains(self, user: User, cruds: list[str]) -> 'QuerySet[Document]':
+        # Superusers have all permissions on all documents. self.all() is lazy and cheaper
+        # than the multi-join query below, since no rows are fetched until the caller iterates.
+        if user.is_superuser:
+            return self.all()
         return self.filter(
             Q(admin=user)
             | Q(documentgrant__user=user, documentgrant__granted_permissions__contains=cruds)
             | Q(documentgrant__group__user=user, documentgrant__granted_permissions__contains=cruds)
+            | Q(tags__taggrant__group__user=user, tags__taggrant__defaults__contains=cruds)
         ).distinct()
 
     def can_read(self, user: User) -> 'QuerySet[Document]':
