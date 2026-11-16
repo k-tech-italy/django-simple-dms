@@ -180,7 +180,7 @@ class TagGrant(models.Model):
 
     def __str__(self) -> str:
         create = 'C' if self.create else ''
-        defaults = ''.join(self.defaults)
+        defaults = ''.join(self.defaults or [])
         return f'{self.tag}-{self.group}-{create}{defaults}'
 
     def save(self, *args, **kwargs) -> None:
@@ -195,20 +195,37 @@ class TagGrant(models.Model):
         return super().save(*args, **kwargs)
 
     def clean(self) -> None:
-        self.defaults = [x.upper() for x in self.defaults]
+        # defaults is nullable: treat None as "no default permissions"
+        self.defaults = [x.upper() for x in self.defaults or []]
         if extra := (set(self.defaults) - {'R', 'U', 'D', 'S'}):
             raise ValidationError(_l('Invalid defaults: %(extra)s') % {'extra': ''.join(extra)}, '__all__')
 
 
 class DocumentQuerySet(models.QuerySet):
     def accessible_by(self, user: User) -> 'QuerySet[Document]':
-        return self.filter(Q(admin=user) | Q(documentgrant__user=user) | Q(documentgrant__group__user=user)).distinct()
+        # Superusers can access all documents. self.all() is lazy and cheaper than the
+        # multi-join query below, since no rows are fetched until the caller iterates.
+        if user.is_superuser:
+            return self.all()
+        return self.filter(
+            Q(admin=user)
+            | Q(documentgrant__user=user)
+            | Q(documentgrant__group__user=user)
+            # A TagGrant with empty/NULL defaults only allows creating documents with that tag;
+            # it grants no access to them. __len on NULL yields NULL, so NULL defaults are excluded too.
+            | Q(tags__taggrant__group__user=user, tags__taggrant__defaults__len__gt=0)
+        ).distinct()
 
     def can_grant_contains(self, user: User, cruds: list[str]) -> 'QuerySet[Document]':
+        # Superusers have all permissions on all documents. self.all() is lazy and cheaper
+        # than the multi-join query below, since no rows are fetched until the caller iterates.
+        if user.is_superuser:
+            return self.all()
         return self.filter(
             Q(admin=user)
             | Q(documentgrant__user=user, documentgrant__granted_permissions__contains=cruds)
             | Q(documentgrant__group__user=user, documentgrant__granted_permissions__contains=cruds)
+            | Q(tags__taggrant__group__user=user, tags__taggrant__defaults__contains=cruds)
         ).distinct()
 
     def can_read(self, user: User) -> 'QuerySet[Document]':
