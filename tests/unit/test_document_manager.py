@@ -169,3 +169,24 @@ def test_superuser_accessible_by(tag_grant_scenario):
     assert set(Document.objects.can_update(superuser).values_list('id', flat=True)) == all_ids
     assert set(Document.objects.can_delete(superuser).values_list('id', flat=True)) == all_ids
     assert set(Document.objects.can_share(superuser).values_list('id', flat=True)) == all_ids
+
+
+@pytest.mark.parametrize('defaults', [[], None])
+def test_tag_grant_without_defaults_not_accessible(db, defaults):
+    from testutils.factories import UserFactory, GroupFactory, DocumentFactory, DocumentTagFactory, TagGrantFactory
+    from django_simple_dms.models import Document, Document2Tag
+
+    user = UserFactory()
+    group = GroupFactory()
+    user.groups.add(group)
+    tag = DocumentTagFactory(title='create-only')
+    document = DocumentFactory(admin=None)
+    Document2Tag.objects.create(document=document, tag=tag)
+    # Create-only grant: the group may create documents with this tag but has no rights on them
+    TagGrantFactory(group=group, tag=tag, create=True, defaults=defaults)
+
+    try:
+        assert document.id not in set(Document.objects.accessible_by(user).values_list('id', flat=True))
+        assert document.id not in set(Document.objects.can_read(user).values_list('id', flat=True))
+    finally:
+        Path(document.document.file.name).unlink(missing_ok=True)

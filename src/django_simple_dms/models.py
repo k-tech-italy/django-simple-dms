@@ -180,7 +180,7 @@ class TagGrant(models.Model):
 
     def __str__(self) -> str:
         create = 'C' if self.create else ''
-        defaults = ''.join(self.defaults)
+        defaults = ''.join(self.defaults or [])
         return f'{self.tag}-{self.group}-{create}{defaults}'
 
     def save(self, *args, **kwargs) -> None:
@@ -195,7 +195,8 @@ class TagGrant(models.Model):
         return super().save(*args, **kwargs)
 
     def clean(self) -> None:
-        self.defaults = [x.upper() for x in self.defaults]
+        # defaults is nullable: treat None as "no default permissions"
+        self.defaults = [x.upper() for x in self.defaults or []]
         if extra := (set(self.defaults) - {'R', 'U', 'D', 'S'}):
             raise ValidationError(_l('Invalid defaults: %(extra)s') % {'extra': ''.join(extra)}, '__all__')
 
@@ -210,7 +211,9 @@ class DocumentQuerySet(models.QuerySet):
             Q(admin=user)
             | Q(documentgrant__user=user)
             | Q(documentgrant__group__user=user)
-            | Q(tags__taggrant__group__user=user)
+            # A TagGrant with empty/NULL defaults only allows creating documents with that tag;
+            # it grants no access to them. __len on NULL yields NULL, so NULL defaults are excluded too.
+            | Q(tags__taggrant__group__user=user, tags__taggrant__defaults__len__gt=0)
         ).distinct()
 
     def can_grant_contains(self, user: User, cruds: list[str]) -> 'QuerySet[Document]':

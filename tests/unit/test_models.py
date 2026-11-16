@@ -288,3 +288,12 @@ def test_document_grant_unique_constraint(
         )
         assert second_grant.id is not None
         assert second_grant.id != first_grant.id
+
+
+def test_tag_grant_none_defaults(db):
+    from testutils.factories import TagGrantFactory
+
+    grant = TagGrantFactory(defaults=None)
+    grant.refresh_from_db()
+    assert grant.defaults == []
+    assert str(grant).endswith('-C')
